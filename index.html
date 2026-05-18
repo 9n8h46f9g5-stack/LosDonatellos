@@ -1150,6 +1150,124 @@ Promise.all([fbGet('/overrides'),fbGet('/versions')]).then(function(results){
   },600);
 })();
 
+// Touch Drag & Drop (long press 500ms to drag, any movement cancels to scroll)
+(function(){
+  var dragEl=null,dragItem=null,lastTarget=null,pressTimer=null,isDragging=false;
+  var startX=0,startY=0;
+  var THRESHOLD=8; // pixels of movement that cancels drag intent
+  var DELAY=500;   // ms hold before drag starts
+
+  function getRow(el){
+    while(el){if(el.dataset&&el.dataset.id)return el;el=el.parentElement;}
+    return null;
+  }
+  function clearDots(){
+    document.querySelectorAll('.dot,.dob').forEach(function(x){x.classList.remove('dot','dob');});
+  }
+  function cancelPress(){
+    clearTimeout(pressTimer);pressTimer=null;
+    isDragging=false;
+    if(dragEl){dragEl.style.opacity='';dragEl.style.boxShadow='';}
+    dragEl=null;dragItem=null;
+  }
+
+  function onTouchStart(e){
+    var row=getRow(e.target);if(!row)return;
+    if(e.target.tagName==='BUTTON'||e.target.closest('button'))return;
+    startX=e.touches[0].clientX;
+    startY=e.touches[0].clientY;
+    isDragging=false;
+    pressTimer=setTimeout(function(){
+      // Only start drag if finger hasn't moved significantly
+      isDragging=true;dragEl=row;dragItem=null;
+      for(var i=0;i<setlist.length;i++){
+        if(setlist[i].id===row.dataset.id){dragItem=setlist[i];break;}
+      }
+      if(!dragItem){isDragging=false;dragEl=null;return;}
+      row.style.opacity='0.4';
+      row.style.boxShadow='0 4px 16px rgba(0,0,0,0.4)';
+    },DELAY);
+  }
+
+  function onTouchMove(e){
+    if(!pressTimer&&!isDragging)return;
+    var t=e.touches[0];
+    var dx=Math.abs(t.clientX-startX);
+    var dy=Math.abs(t.clientY-startY);
+
+    // If finger moved more than threshold and we haven't started dragging yet -> cancel, let scroll happen
+    if(!isDragging){
+      if(dx>THRESHOLD||dy>THRESHOLD){
+        clearTimeout(pressTimer);pressTimer=null;
+      }
+      return; // don't prevent default - allow scroll
+    }
+
+    // We are dragging - prevent scroll
+    e.preventDefault();
+    var el=document.elementFromPoint(t.clientX,t.clientY);
+    var row=getRow(el);
+    clearDots();
+    if(row&&row!==dragEl){
+      lastTarget=row;
+      var rect=row.getBoundingClientRect();
+      row.classList.add(t.clientY<rect.top+rect.height/2?'dot':'dob');
+    }
+  }
+
+  function onTouchEnd(e){
+    clearTimeout(pressTimer);pressTimer=null;
+    if(!isDragging||!dragEl){isDragging=false;return;}
+    dragEl.style.opacity='';dragEl.style.boxShadow='';
+    clearDots();
+    if(lastTarget&&lastTarget!==dragEl){
+      var t=e.changedTouches[0];
+      var fi=-1,ni=-1;
+      for(var i=0;i<setlist.length;i++){if(setlist[i].id===dragItem.id)fi=i;}
+      if(fi>=0){
+        var moved=setlist.splice(fi,1)[0];
+        var rect=lastTarget.getBoundingClientRect();
+        var after=t.clientY>=rect.top+rect.height/2;
+        for(var j=0;j<setlist.length;j++){if(setlist[j].id===lastTarget.dataset.id){ni=j;break;}}
+        setlist.splice(after?ni+1:ni,0,moved);
+        render();
+      }
+    }
+    dragEl=null;dragItem=null;lastTarget=null;isDragging=false;
+  }
+
+  function onTouchCancel(){
+    cancelPress();clearDots();lastTarget=null;
+  }
+
+  function attach(id){
+    var el=document.getElementById(id);if(!el)return;
+    // Remove old listeners if any
+    if(el._touch_attached)return;
+    el._touch_attached=true;
+    el.addEventListener('touchstart',onTouchStart,{passive:true});
+    el.addEventListener('touchmove',onTouchMove,{passive:false});
+    el.addEventListener('touchend',onTouchEnd,{passive:false});
+    el.addEventListener('touchcancel',onTouchCancel,{passive:true});
+  }
+
+  function attachAll(){attach('set-d');attach('set-m');}
+  setTimeout(attachAll,300);
+
+  // Re-attach after render via MutationObserver
+  var obs=new MutationObserver(function(){
+    ['set-d','set-m'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el){el._touch_attached=false;attach(id);}
+    });
+  });
+  setTimeout(function(){
+    ['set-d','set-m'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el)obs.observe(el,{childList:true});
+    });
+  },400);
+})();
 </script>
 </body>
 </html>
