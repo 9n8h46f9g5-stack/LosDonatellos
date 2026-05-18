@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- saved from url=(0056)file:///Users/ole.feltes/Downloads/donots-setlist_1.html -->
+<!-- saved from url=(0056)file:///Users/ole.feltes/Downloads/donots-setlist_3.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Donots – Setlist Builder</title>
-<link rel="stylesheet" href="./indexD_files/tabler-icons.min.css">
+<link rel="stylesheet" href="./index_files/tabler-icons.min.css">
 <style>
 :root{--bg:#f6f6f6;--sf:#fff;--sf2:#f0f0f0;--bd:#e0e0e0;--bd2:#ccc;--tx:#1a1a1a;--tx2:#555;--tx3:#999;--ac:#e84545;--sbg:#eafaf1;--sbd:#27ae60;--stx:#1e8449;--wbg:#fef9e7;--wtx:#b7770d;--dbg:#fdf0ee;--dbd:#e74c3c;--dtx:#c0392b;--ibg:#eaf4fd;--ibd:#2e86c1;--itx:#1a5276;--r:8px;--rs:5px}
 @media(prefers-color-scheme:dark){:root{--bg:#111;--sf:#1c1c1c;--sf2:#252525;--bd:#2e2e2e;--bd2:#3a3a3a;--tx:#f0f0f0;--tx2:#aaa;--tx3:#666;--ac:#e84545;--sbg:#0d2a0d;--sbd:#27ae60;--stx:#2ecc71;--wbg:#2a1e00;--wtx:#f0a500;--dbg:#2a0a0a;--dbd:#e74c3c;--dtx:#e74c3c;--ibg:#0d1e2e;--ibd:#2e86c1;--itx:#4a9eff}}
@@ -193,7 +193,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:-apple-sy
     <div class="mbtns"><button class="mbtn" onclick="closeModal()">Cancel</button><button class="mbtn ok" onclick="confirmModal()">OK</button></div>
   </div>
 </div>
-<script src="./indexD_files/jspdf.umd.min.js"></script>
+<script src="./index_files/jspdf.umd.min.js"></script>
 <script>
 var ALBUMS=[
 {name:"Pedigree Punk",year:"1996",tracks:[{t:"Elbow And A Smile",d:"3:48"},{t:"Yestertomorrow",d:"3:15"},{t:"Fight Instead",d:"3:46"},{t:"Feeble",d:"2:13"},{t:"Personality Clash",d:"3:29"},{t:"Little Song",d:"2:23"},{t:"Gentleway",d:"3:32"},{t:"Needful Things",d:"3:47"},{t:"Awakening",d:"3:31"}]},
@@ -1162,70 +1162,126 @@ Promise.all([fbGet('/overrides'),fbGet('/versions')]).then(function(results){
   },600);
 })();
 
-// Touch Drag & Drop (long press 500ms, movement cancels to allow scroll)
+// Touch Drag & Drop (long press 500ms to drag, any movement cancels to scroll)
 (function(){
   var dragEl=null,dragItem=null,lastTarget=null,pressTimer=null,isDragging=false;
-  var startX=0,startY=0,THRESHOLD=8,DELAY=500;
-  function getRow(el){while(el){if(el.dataset&&el.dataset.id)return el;el=el.parentElement;}return null;}
-  function clearDots(){document.querySelectorAll('.dot,.dob').forEach(function(x){x.classList.remove('dot','dob');});}
+  var startX=0,startY=0;
+  var THRESHOLD=8; // pixels of movement that cancels drag intent
+  var DELAY=500;   // ms hold before drag starts
+
+  function getRow(el){
+    while(el){if(el.dataset&&el.dataset.id)return el;el=el.parentElement;}
+    return null;
+  }
+  function clearDots(){
+    document.querySelectorAll('.dot,.dob').forEach(function(x){x.classList.remove('dot','dob');});
+  }
+  function cancelPress(){
+    clearTimeout(pressTimer);pressTimer=null;
+    isDragging=false;
+    if(dragEl){dragEl.style.opacity='';dragEl.style.boxShadow='';}
+    dragEl=null;dragItem=null;
+  }
+
   function onTouchStart(e){
     var row=getRow(e.target);if(!row)return;
     if(e.target.tagName==='BUTTON'||e.target.closest('button'))return;
-    startX=e.touches[0].clientX;startY=e.touches[0].clientY;
+    startX=e.touches[0].clientX;
+    startY=e.touches[0].clientY;
     isDragging=false;
     pressTimer=setTimeout(function(){
+      // Only start drag if finger hasn't moved significantly
       isDragging=true;dragEl=row;dragItem=null;
-      for(var i=0;i<setlist.length;i++){if(setlist[i].id===row.dataset.id){dragItem=setlist[i];break;}}
+      for(var i=0;i<setlist.length;i++){
+        if(setlist[i].id===row.dataset.id){dragItem=setlist[i];break;}
+      }
       if(!dragItem){isDragging=false;dragEl=null;return;}
-      row.style.opacity='0.4';row.style.boxShadow='0 4px 16px rgba(0,0,0,0.4)';
+      row.style.opacity='0.4';
+      row.style.boxShadow='0 4px 16px rgba(0,0,0,0.4)';
     },DELAY);
   }
+
   function onTouchMove(e){
     if(!pressTimer&&!isDragging)return;
     var t=e.touches[0];
+    var dx=Math.abs(t.clientX-startX);
+    var dy=Math.abs(t.clientY-startY);
+
+    // If finger moved more than threshold and we haven't started dragging yet -> cancel, let scroll happen
     if(!isDragging){
-      if(Math.abs(t.clientX-startX)>THRESHOLD||Math.abs(t.clientY-startY)>THRESHOLD){
+      if(dx>THRESHOLD||dy>THRESHOLD){
         clearTimeout(pressTimer);pressTimer=null;
       }
-      return;
+      return; // don't prevent default - allow scroll
     }
+
+    // We are dragging - prevent scroll
     e.preventDefault();
     var el=document.elementFromPoint(t.clientX,t.clientY);
-    var row=getRow(el);clearDots();
-    if(row&&row!==dragEl){lastTarget=row;var rect=row.getBoundingClientRect();row.classList.add(t.clientY<rect.top+rect.height/2?'dot':'dob');}
+    var row=getRow(el);
+    clearDots();
+    if(row&&row!==dragEl){
+      lastTarget=row;
+      var rect=row.getBoundingClientRect();
+      row.classList.add(t.clientY<rect.top+rect.height/2?'dot':'dob');
+    }
   }
+
   function onTouchEnd(e){
     clearTimeout(pressTimer);pressTimer=null;
     if(!isDragging||!dragEl){isDragging=false;return;}
-    dragEl.style.opacity='';dragEl.style.boxShadow='';clearDots();
+    dragEl.style.opacity='';dragEl.style.boxShadow='';
+    clearDots();
     if(lastTarget&&lastTarget!==dragEl){
-      var t=e.changedTouches[0],fi=-1,ni=-1;
+      var t=e.changedTouches[0];
+      var fi=-1,ni=-1;
       for(var i=0;i<setlist.length;i++){if(setlist[i].id===dragItem.id)fi=i;}
       if(fi>=0){
         var moved=setlist.splice(fi,1)[0];
-        var rect=lastTarget.getBoundingClientRect(),after=t.clientY>=rect.top+rect.height/2;
+        var rect=lastTarget.getBoundingClientRect();
+        var after=t.clientY>=rect.top+rect.height/2;
         for(var j=0;j<setlist.length;j++){if(setlist[j].id===lastTarget.dataset.id){ni=j;break;}}
-        setlist.splice(after?ni+1:ni,0,moved);render();
+        setlist.splice(after?ni+1:ni,0,moved);
+        render();
       }
     }
     dragEl=null;dragItem=null;lastTarget=null;isDragging=false;
   }
+
   function onTouchCancel(){
-    clearTimeout(pressTimer);pressTimer=null;
-    if(dragEl){dragEl.style.opacity='';dragEl.style.boxShadow='';}
-    clearDots();dragEl=null;dragItem=null;lastTarget=null;isDragging=false;
+    cancelPress();clearDots();lastTarget=null;
   }
+
   function attach(id){
     var el=document.getElementById(id);if(!el)return;
+    // Remove old listeners if any
+    if(el._touch_attached)return;
+    el._touch_attached=true;
     el.addEventListener('touchstart',onTouchStart,{passive:true});
     el.addEventListener('touchmove',onTouchMove,{passive:false});
     el.addEventListener('touchend',onTouchEnd,{passive:false});
     el.addEventListener('touchcancel',onTouchCancel,{passive:true});
   }
-  setTimeout(function(){attach('set-d');attach('set-m');},300);
-  var obs=new MutationObserver(function(){attach('set-d');attach('set-m');});
-  setTimeout(function(){['set-d','set-m'].forEach(function(id){var el=document.getElementById(id);if(el)obs.observe(el,{childList:true});});},400);
-})();</script>
+
+  function attachAll(){attach('set-d');attach('set-m');}
+  setTimeout(attachAll,300);
+
+  // Re-attach after render via MutationObserver
+  var obs=new MutationObserver(function(){
+    ['set-d','set-m'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el){el._touch_attached=false;attach(id);}
+    });
+  });
+  setTimeout(function(){
+    ['set-d','set-m'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el)obs.observe(el,{childList:true});
+    });
+  },400);
+})();
+
+</script>
 
 
 </body></html>
